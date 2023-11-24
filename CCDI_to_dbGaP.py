@@ -126,7 +126,6 @@ def ccdi_manifest_to_dict(excel_file: ExcelFile) -> Dict:
     a dictionary with sheetnames as keys and pandas
     dataframes as values
 
-    The sheet will be dropped if found empty
     """
     sheets_to_avoid = ["README and INSTRUCTIONS", "Dictionary", "Terms and Value Sets"]
     ccdi_dict_raw = excel_sheets_to_dict(excel_file, no_names=sheets_to_avoid)
@@ -152,6 +151,8 @@ def ccdi_manifest_to_dict(excel_file: ExcelFile) -> Dict:
 
 
 def load_args():
+    """Returns args for arguments
+    """
     # set up arguments for this script
     parser = argparse.ArgumentParser(
         description="This script is a python version to generate dbGaP submission files using a validated CCDI submission manifest"
@@ -179,6 +180,8 @@ def load_args():
 
 
 def check_participant_unique(sub_df: DataFrame, logger) -> None:
+    """Checks if any subject_ID appears in multiple rows
+    """
     sub_df_size = sub_df.groupby("SUBJECT_ID").size()
     if sub_df_size.max() > 1:
         subject_warning = sub_df_size[sub_df_size > 1].index.tolist()
@@ -190,6 +193,9 @@ def check_participant_unique(sub_df: DataFrame, logger) -> None:
 
 
 class DD_dataframe:
+    """A class helps to create 3 dataframes of data dictionary (DD) for
+    Subject consent, subject sample, and sample tummor status 
+    """
     def __init__(self) -> None:
         self.subject_consent_dd = {
             "VARNAME": ["VARDESC", "TYPE", "VALUES"],
@@ -238,6 +244,8 @@ class DD_dataframe:
 
 
 class Pre_dbGaP_combine:
+    """A class that concates previous submission to current submission
+    """
     def __init__(
         self,
         pre_sub_dir: List,
@@ -285,6 +293,8 @@ class Pre_dbGaP_combine:
 
 
 def create_meta_json(phs_id: str) -> Dict:
+    """Returns a metadata.json describing all 6 submission files
+    """
     dict_name = phs_id + "_" + get_date()
     file_name_pattern = phs_id + "_dbGaP_submission.txt"
     sc_ds_filename = "SC_DS_" + file_name_pattern
