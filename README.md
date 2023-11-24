@@ -17,19 +17,19 @@ A controlled **virtual environment** of Python is always recommanded for running
 
     An environment yaml `conda_environment.yml` can be be found under folder `envs/`. To create the environment, simply run
 
-    ```
+    ```bash
     conda env create -f <path_to_env_yml>
     ```
     You should be able to find an environment called `CCDI_to_dbGaP_env` when you run 
 
-    ```
+    ```bash
     conda env list
     ```
 - **Activate conda environment**
 
     All the dependecies that the script requires should be succesfully installed within this environment. To activate the environemnt, simply run
 
-    ```
+    ```bash
     conda activate CCDI_to_dbGaP_env
     ```
 
@@ -37,13 +37,16 @@ A controlled **virtual environment** of Python is always recommanded for running
 
 - **Deactivate conda environment**
 
-    ```
+    ```bash
     conda deactivate
     ```
 
 ### Usage instruction
 
-```
+
+> **Note**: THIS SCRIPT IS ONLY MEANT FOR CCDI AND ALL CONSENT IS ASSUMED TO BE GRU, CONSENT GROUP 1.
+
+```bash
 >> python CCDI_to_dbGaP.py --help
 usage: CCDI_to_dbGaP.py [-h] -f FILE [-s PREVIOUS_SUBMISSION]
 
