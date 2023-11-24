@@ -46,7 +46,7 @@ A controlled **virtual environment** of Python is always recommanded for running
 ### Usage instruction
 
 
-> **Note**: THIS SCRIPT IS ONLY MEANT FOR CCDI AND ALL CONSENT IS ASSUMED TO BE GRU, CONSENT GROUP 1.
+> **❗Note**: THIS SCRIPT IS ONLY MEANT FOR CCDI AND ALL CONSENT IS ASSUMED TO BE GRU, CONSENT GROUP 1.
 
 ```bash
 >> python CCDI_to_dbGaP.py --help
