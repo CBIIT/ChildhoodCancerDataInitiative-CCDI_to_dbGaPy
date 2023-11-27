@@ -48,7 +48,7 @@ A controlled **virtual environment** of Python is always recommanded for running
 
 > **❗Note**: If no **CONSENT NUMBER** is provided, ALL CONSENT IS ASSUMED TO BE GRU, CONSENT GROUP 1.
 
-```bash
+```
 >> python CCDI_to_dbGaP.py --help
 usage: CCDI_to_dbGaP.py [-h] -f FILE [-c CONSENT_NUMBER] [-s PREVIOUS_SUBMISSION]
 
