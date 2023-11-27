@@ -46,11 +46,11 @@ A controlled **virtual environment** of Python is always recommanded for running
 ### Usage instruction
 
 
-> **❗Note**: THIS SCRIPT IS ONLY MEANT FOR CCDI AND ALL CONSENT IS ASSUMED TO BE GRU, CONSENT GROUP 1.
+> **❗Note**: If no **CONSENT NUMBER** is provided, ALL CONSENT IS ASSUMED TO BE GRU, CONSENT GROUP 1.
 
 ```bash
 >> python CCDI_to_dbGaP.py --help
-usage: CCDI_to_dbGaP.py [-h] -f FILE [-s PREVIOUS_SUBMISSION]
+usage: CCDI_to_dbGaP.py [-h] -f FILE [-c CONSENT_NUMBER] [-s PREVIOUS_SUBMISSION]
 
 This script is a python version to generate dbGaP submission files using a validated CCDI
 submission manifest
@@ -60,8 +60,10 @@ required arguments:
                         CCDI_submission_metadata_template (.xlsx)
 
 optional arguments:
+  -c CONSENT_NUMBER, --consent_number CONSENT_NUMBER
+                        Number of consent group for the study
   -s PREVIOUS_SUBMISSION, --previous_submission PREVIOUS_SUBMISSION
-                        A previous dbGaP submission folder for the same phs_id study.
+                        A previous dbGaP submission directory for the same phs_id study.
 ```
 
 - **Inputs**
