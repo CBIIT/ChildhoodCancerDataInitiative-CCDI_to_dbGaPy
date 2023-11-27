@@ -151,8 +151,6 @@ def ccdi_manifest_to_dict(excel_file: ExcelFile) -> Dict:
 
 
 def load_args():
-    """Returns args for arguments
-    """
     # set up arguments for this script
     parser = argparse.ArgumentParser(
         description="This script is a python version to generate dbGaP submission files using a validated CCDI submission manifest"
@@ -168,6 +166,13 @@ def load_args():
         help="A validated dataset file  based on the template CCDI_submission_metadata_template (.xlsx)",
     )
     optional_arg.add_argument(
+        "-c",
+        "--consent_number",
+        type=int,
+        required=False,
+        help="Number of consent group for the study",
+    )
+    optional_arg.add_argument(
         "-s",
         "--previous_submission",
         type=str,
@@ -180,8 +185,6 @@ def load_args():
 
 
 def check_participant_unique(sub_df: DataFrame, logger) -> None:
-    """Checks if any subject_ID appears in multiple rows
-    """
     sub_df_size = sub_df.groupby("SUBJECT_ID").size()
     if sub_df_size.max() > 1:
         subject_warning = sub_df_size[sub_df_size > 1].index.tolist()
@@ -193,9 +196,6 @@ def check_participant_unique(sub_df: DataFrame, logger) -> None:
 
 
 class DD_dataframe:
-    """A class helps to create 3 dataframes of data dictionary (DD) for
-    Subject consent, subject sample, and sample tummor status 
-    """
     def __init__(self) -> None:
         self.subject_consent_dd = {
             "VARNAME": ["VARDESC", "TYPE", "VALUES"],
@@ -244,8 +244,6 @@ class DD_dataframe:
 
 
 class Pre_dbGaP_combine:
-    """A class that concates previous submission to current submission
-    """
     def __init__(
         self,
         pre_sub_dir: List,
@@ -293,8 +291,6 @@ class Pre_dbGaP_combine:
 
 
 def create_meta_json(phs_id: str) -> Dict:
-    """Returns a metadata.json describing all 6 submission files
-    """
     dict_name = phs_id + "_" + get_date()
     file_name_pattern = phs_id + "_dbGaP_submission.txt"
     sc_ds_filename = "SC_DS_" + file_name_pattern
@@ -326,14 +322,10 @@ def main():
 
     # Create logger instance
     logger = get_logger(loggername="CCDI_to_dbGaP", log_level="info")
-    logger.warning(
-        "THIS SCRIPT IS ONLY MEANT FOR CCDI AND ALL CONSENT IS ASSUMED TO BE GRU, CONSENT GROUP 1."
-    )
 
     # Read the content in CCDI manifest
     try:
         manifest_f = pd.ExcelFile(manifest)
-        logger.info(f"Checking file {manifest}")
         # create a dict using the CCDI manifest
         workbook_dict = ccdi_manifest_to_dict(manifest_f)
         logger.info(f"Reading the validated CCDI manifest {manifest}")
@@ -347,15 +339,24 @@ def main():
         logger.error(f"Issue occurred while openning file {manifest}")
         sys.exit()
 
-    # extract particpant and sample sheet
+    # check if consent_number is provided
+    if args.consent_number:
+        consent_number = args.consent_number
+    else:
+        consent_number = 1
+        logger.warning(
+            "No consent group number was provided. All CONSENT is assumed to be GRU, Consent Group 1"
+        )
+
+    # extract particpant and sample sheets
     participant_df = workbook_dict["participant"]
     sample_df = workbook_dict["sample"]
 
-    # subject_consent
+    # subject_consent df
     subject_consent = participant_df[["participant_id", "sex_at_birth"]].rename(
         columns={"participant_id": "SUBJECT_ID", "sex_at_birth": "SEX"}
     )
-    subject_consent["CONSENT"] = "1"
+    subject_consent["CONSENT"] = str(consent_number)
     subject_consent["SEX"][subject_consent["SEX"].str.contains("Female")] = "2"
     subject_consent["SEX"][subject_consent["SEX"].str.contains("Male")] = "1"
     subject_consent["SEX"][~subject_consent["SEX"].str.contains("1|2")] = "UNK"
@@ -368,7 +369,7 @@ def main():
     # check if each participant only appears in one row
     check_participant_unique(sub_df=subject_consent, logger=logger)
 
-    # subject_sample
+    # subject_sample df
     subject_sample = sample_df[["participant.participant_id", "sample_id"]].rename(
         columns={"participant.participant_id": "SUBJECT_ID", "sample_id": "SAMPLE_ID"}
     )
@@ -378,7 +379,7 @@ def main():
         .reset_index(drop=True)
     )
 
-    # sample_tumor
+    # sample_tumor df
     sample_tumor = sample_df[["sample_id", "sample_tumor_status"]].rename(
         columns={"sample_id": "SAMPLE_ID", "sample_tumor_status": "SAMPLE_TUMOR_STATUS"}
     )
@@ -411,8 +412,10 @@ def main():
             ).read_pre_dir()
         except FileNotFoundError:
             logger.error(f"Directory {args.previous_submission} does not exit")
+            logger.warning("Script proceeds without previous submission info")
         except PermissionError:
             logger.error(f"Permission denied for directory {args.previous_submission}")
+            logger.warning("Script proceeds without previous submission info")
     else:
         logger.warning("No previous submission directory was provided")
 
