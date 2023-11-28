@@ -356,6 +356,8 @@ def main():
     subject_consent["SEX"][subject_consent["SEX"].str.contains("Female")] = "2"
     subject_consent["SEX"][subject_consent["SEX"].str.contains("Male")] = "1"
     subject_consent["SEX"][~subject_consent["SEX"].str.contains("1|2")] = "UNK"
+    # reorder column names
+    subject_consent = subject_consent[["SUBJECT_ID","CONSENT","SEX"]]
     # drop rows with empty SUBJECT_ID and drop duplicates
     subject_consent = (
         subject_consent.dropna(subset=["SUBJECT_ID"])
