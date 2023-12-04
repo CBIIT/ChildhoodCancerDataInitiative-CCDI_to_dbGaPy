@@ -178,6 +178,9 @@ def load_args():
 
 
 def check_participant_unique(sub_df: DataFrame, logger) -> None:
+    """Check if any participant has two entries. It only gives warning
+    if multiple rows of same participants with different records of sex occur
+    """
     sub_df_size = sub_df.groupby("SUBJECT_ID").size()
     if sub_df_size.max() > 1:
         subject_warning = sub_df_size[sub_df_size > 1].index.tolist()
@@ -308,6 +311,147 @@ def create_meta_json(phs_id: str) -> Dict:
     return return_dict
 
 
+def extract_ssm(sample_sheet_df: DataFrame, logger) -> DataFrame:
+    """Extract subject sample df and only keeps samples with
+    participant/subject value
+    """
+    logger.info(f"Number of samples in sample sheet: {sample_sheet_df.shape[0]}")
+    participant_samples = sample_sheet_df[
+        ["participant.participant_id", "sample_id"]
+    ].rename(
+        columns={"participant.participant_id": "SUBJECT_ID", "sample_id": "SAMPLE_ID"}
+    )
+    if participant_samples["SUBJECT_ID"].isna().any():
+        df_to_report = sample_sheet_df[participant_samples["SUBJECT_ID"].isna()][
+            ["cell_line.cell_line_id", "pdx.pdx_id", "sample_id"]
+        ]
+        logger.error(
+            f"{df_to_report.shape[0]} samples were not derived from participants and will not be included in submission file for now:\n"
+            + df_to_report.to_markdown(
+                tablefmt="fancy_grid",
+                index=False,
+            )
+        )
+    else:
+        pass
+
+    participant_samples = (
+        participant_samples.dropna(subset=["SUBJECT_ID", "SAMPLE_ID"], how="any")
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+
+    return participant_samples
+
+
+def extract_sc(
+    participant_sheet: DataFrame, participant_samples: DataFrame, logger
+) -> DataFrame:
+    """Extract subject consent df and only keep subjects that have sample"""
+    subject_consent = participant_sheet[["participant_id", "sex_at_birth"]].rename(
+        columns={"participant_id": "SUBJECT_ID", "sex_at_birth": "SEX"}
+    )
+    subject_consent["CONSENT"] = "1"
+    subject_consent["SEX"][subject_consent["SEX"].str.contains("Female")] = "2"
+    subject_consent["SEX"][subject_consent["SEX"].str.contains("Male")] = "1"
+    subject_consent["SEX"][~subject_consent["SEX"].str.contains("1|2")] = "UNK"
+    # reorder column names
+    subject_consent = subject_consent[["SUBJECT_ID", "CONSENT", "SEX"]]
+    # drop rows with empty SUBJECT_ID and drop duplicates
+    subject_consent = (
+        subject_consent.dropna(subset=["SUBJECT_ID"])
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+    logger.info(
+        f"Number of unique participants in participant sheet: {subject_consent.shape[0]}"
+    )
+    subject_w_sample = participant_samples["SUBJECT_ID"].unique().tolist()
+    if subject_consent.shape[0] > len(subject_w_sample):
+        subject_to_remove = subject_consent.loc[
+            ~subject_consent["SUBJECT_ID"].isin(subject_w_sample)
+        ]
+        logger.warning(
+            f"{subject_to_remove.shape[0]} subjects were removed due to lack of sample:\n"
+            + subject_to_remove.to_markdown(tablefmt="fancy_grid", index=False)
+        )
+        subject_consent = subject_consent.loc[
+            subject_consent["SUBJECT_ID"].isin(subject_w_sample)
+        ]
+    else:
+        pass
+
+    return subject_consent
+
+
+def extract_sa(
+    sample_sheet: DataFrame, participant_sample: DataFrame, logger
+) -> DataFrame:
+    """Extract sample attribute df and only keep
+    sample ids derived from participant
+    """
+    sample_attribute = sample_sheet[["sample_id", "sample_tumor_status"]].rename(
+        columns={"sample_id": "SAMPLE_ID", "sample_tumor_status": "SAMPLE_TUMOR_STATUS"}
+    )
+    sample_attribute = (
+        sample_attribute.dropna(subset=["SAMPLE_ID"])
+        .drop_duplicates()
+        .reset_index(drop=True)
+    )
+    unique_samples = participant_sample["SAMPLE_ID"].unique().tolist()
+    sample_attribute = sample_attribute.loc[
+        sample_attribute["SAMPLE_ID"].isin(unique_samples)
+    ]
+    return sample_attribute
+
+
+def check_mapping(
+    subject_consent: DataFrame,
+    subject_sample: DataFrame,
+    sample_tumor: DataFrame,
+    logger,
+) -> None:
+    """This returns logging error if there is an error of mapping
+    identified between these three df. It likely to occure if there is
+    mapping issue with previous dbGaP submission files.
+    """
+    logger.info("Start checking subject sample mapping between SC, SSM, and SA records")
+    unique_sample_ids = subject_sample["SAMPLE_ID"].unique().tolist()
+    unique_participant_ids = subject_sample["SUBJECT_ID"].unique().tolist()
+    new_subject_id = [
+        i for i in subject_consent["SUBJECT_ID"] if i not in unique_participant_ids
+    ]
+    new_sample_id = [k for k in sample_tumor["SAMPLE_ID"] if k not in unique_sample_ids]
+    # check if all subjects in SC can be found in SSM
+    if len(new_subject_id) > 0:
+        logger.error(
+            f"These subjects in SUBJECT CONSENT can't be found in SUBJECT SAMPLE and please fix this before submission:\n{*new_subject_id,}"
+        )
+    else:
+        pass
+    # check if all all samples in SA can be found in SSM
+    if len(new_sample_id) > 0:
+        logger.error(
+            f"These samples in SAMPLE ATTRIBUTE can't be found in SUBJECT SAMPLE and please fix this before submission:\n{*new_sample_id,}"
+        )
+    else:
+        pass
+    # check if sample_ID is associated with multiple subjects
+    subject_sample_groupby = subject_sample.groupby("SAMPLE_ID").size()
+    if subject_sample_groupby.max() > 1:
+        sample_to_fix = subject_sample_groupby[
+            subject_sample_groupby > 1
+        ].index.tolist()
+        logger.error(
+            f"These SAMPLE_ID are associated with multiple SUBJECT_ID and please fix this before submission:\n"
+            + subject_sample.loc[
+                subject_sample["SAMPLE_ID"].isin(sample_to_fix)
+            ].sort_values(by=["SAMPLE_ID"]).to_markdown(tablefmt="fancy_grid", index=False)
+        )
+    else:
+        pass
+
+
 def main():
     args = load_args()
 
@@ -332,7 +476,6 @@ def main():
         logger.error(f"Issue occurred while openning file {manifest}")
         sys.exit()
 
-
     # extract study, particpant, and sample sheets
     study_df = workbook_dict["study"]
     participant_df = workbook_dict["participant"]
@@ -342,49 +485,35 @@ def main():
     study_consent = study_df["consent"][0]
     if pd.isna(study_consent):
         study_consent = "GRU"
-        logger.warning("No CONSENT value found in CCDI study manifest. All Consent is assumed to be GRU")
+        logger.warning(
+            "No CONSENT value found in CCDI study manifest. All Consent is assumed to be GRU"
+        )
     elif study_consent == "GRU":
         logger.info(f"Consent {study_consent} was found in CCDI study manifest")
     else:
-        logger.error(f"Consent {study_consent} was found in CCDI study manifest. Please fix the encoded value for CONSENT in SC_DD.xlsx before submission.")
+        logger.error(
+            f"Consent {study_consent} was found in CCDI study manifest. Please fix the encoded value for CONSENT in SC_DD.xlsx before submission."
+        )
+
+    # dbgap submission is sample centered. Extract SSM information for first
+    # subject_sample SSM df
+    subject_sample = extract_ssm(
+        sample_sheet_df=sample_df,
+        logger=logger,
+    )
 
     # subject_consent df
-    subject_consent = participant_df[["participant_id", "sex_at_birth"]].rename(
-        columns={"participant_id": "SUBJECT_ID", "sex_at_birth": "SEX"}
-    )
-    subject_consent["CONSENT"] = "1"
-    subject_consent["SEX"][subject_consent["SEX"].str.contains("Female")] = "2"
-    subject_consent["SEX"][subject_consent["SEX"].str.contains("Male")] = "1"
-    subject_consent["SEX"][~subject_consent["SEX"].str.contains("1|2")] = "UNK"
-    # reorder column names
-    subject_consent = subject_consent[["SUBJECT_ID","CONSENT","SEX"]]
-    # drop rows with empty SUBJECT_ID and drop duplicates
-    subject_consent = (
-        subject_consent.dropna(subset=["SUBJECT_ID"])
-        .drop_duplicates()
-        .reset_index(drop=True)
+    subject_consent = extract_sc(
+        participant_sheet=participant_df,
+        participant_samples=subject_sample,
+        logger=logger,
     )
     # check if each participant only appears in one row
     check_participant_unique(sub_df=subject_consent, logger=logger)
 
-    # subject_sample df
-    subject_sample = sample_df[["participant.participant_id", "sample_id"]].rename(
-        columns={"participant.participant_id": "SUBJECT_ID", "sample_id": "SAMPLE_ID"}
-    )
-    subject_sample = (
-        subject_sample.dropna(subset=["SUBJECT_ID", "SAMPLE_ID"], how="any")
-        .drop_duplicates()
-        .reset_index(drop=True)
-    )
-
     # sample_tumor df
-    sample_tumor = sample_df[["sample_id", "sample_tumor_status"]].rename(
-        columns={"sample_id": "SAMPLE_ID", "sample_tumor_status": "SAMPLE_TUMOR_STATUS"}
-    )
-    sample_tumor = (
-        sample_tumor.dropna(subset=["SAMPLE_ID"])
-        .drop_duplicates()
-        .reset_index(drop=True)
+    sample_tumor = extract_sa(
+        sample_sheet=sample_df, participant_sample=subject_sample, logger=logger
     )
 
     # Create DD dataframes
@@ -416,6 +545,14 @@ def main():
             logger.warning("Script proceeds without previous submission info")
     else:
         logger.warning("No previous submission directory was provided")
+
+    # Check mapping error before output writing
+    check_mapping(
+        subject_consent=subject_consent,
+        subject_sample=subject_sample,
+        sample_tumor=sample_tumor,
+        logger=logger,
+    )
 
     # prepare meta json output
     phs_id = participant_df["study.study_id"][0]
