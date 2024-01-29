@@ -1,4 +1,4 @@
-# ChildhoodCancerDataInitiative-CCDI_to_dbGaPy
+# ChildhoodCancerDataInitiative-CCDI_to_dbGaPy (ARCHIVED)
 
 This repo contains a python script which takes data from a validated CCDI submission manifest and creates dbGaP submission files specifically for a CCDI project.
 
